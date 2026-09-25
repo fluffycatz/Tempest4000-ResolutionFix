@@ -11,3 +11,4 @@ First release.
   (`t4k_resfix.py`) with `--check`, `--restore`, `--no-cave`, `--set-mode`.
 * Supports both Steam builds (`Win10\` 2018-10-09 and `Win7-8\` 2018-10-12).
 * Emulation test harness (`tools/emu_test.py`).
+* Known incompatibility documented: NVIDIA RTX HDR freezes the game after the intro (Auto HDR is fine).

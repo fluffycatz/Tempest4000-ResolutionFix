@@ -116,7 +116,8 @@ $ python3 tools/emu_test.py Tempest4000.exe            # patched
   1366x768 laptop, 5 modes                src=   5 accepted=  4 4K@60=False default=1366 x 768 @60 Hz
 ```
 
-Confirmed on real hardware: RTX 5090 + LG G3 (HDMI 2.1), 3840×2160 at 60 and 144 Hz.
+Confirmed on real hardware: RTX 5090 + LG G3 (HDMI 2.1), 3840×2160 at 60 and 144 Hz, Windows HDR +
+Auto HDR on.
 
 ## FAQ
 
@@ -126,6 +127,11 @@ not touch anything except the launcher's mode-list loop. Steam still runs the ga
 **The list shows 50 Hz, 60 Hz, 100 Hz … but not 59.94 Hz.** That is the game's own de-duplication
 (refresh rates within 5 Hz of the previous entry for the same resolution are merged, keeping the higher
 one). Unchanged by this patch.
+
+**HDR.** The game runs in exclusive fullscreen with an SDR swap chain. Windows HDR with **Auto HDR** works
+(tested). **NVIDIA RTX HDR does not**: with RTX HDR enabled for this game it freezes after the Atari
+logo and hangs again on exit — that is the driver's injection, not the game or this patch. Disable
+RTX HDR for Tempest 4000 (NVIDIA App → Graphics → per-program settings) and use Auto HDR instead.
 
 **The default selection is odd at first launch.** The launcher pre-selects the closest match to the mode
 stored in your prefs (or to the desktop size, which it measures without DPI awareness). Pick the mode you

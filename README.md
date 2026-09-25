@@ -39,8 +39,9 @@ powershell -ExecutionPolicy Bypass -File .\T4K-ResolutionFix.ps1
 | Explicit exe path(s) | `T4K-ResolutionFix.bat "C:\Program Files (x86)\Steam\steamapps\common\Tempest 4000\Win10\Tempest4000.exe"` |
 | Minimal 2-byte variant only (see below) | `T4K-ResolutionFix.bat -NoCave` |
 | **HDR / borderless mode** (see below) | `T4K-ResolutionFix.bat -Borderless` |
+| **Skip the Atari intro video** (see below) | `T4K-ResolutionFix.bat -NoIntro` |
 | Pre-select a mode in your prefs file (optional) | `T4K-ResolutionFix.bat -SetMode 3840x2160@60` |
-| Linux / Steam Deck / macOS | `python3 t4k_resfix.py` (same options, lower-case: `--check`, `--restore`, `--no-cave`, `--borderless`, `--set-mode 3840x2160@60`) |
+| Linux / Steam Deck / macOS | `python3 t4k_resfix.py` (same options, lower-case: `--check`, `--restore`, `--no-cave`, `--borderless`, `--no-intro`, `--set-mode 3840x2160@60`) |
 
 The Python patcher needs no extra packages for the known Steam builds. For an unknown build
 (GOG? a future re-link?) it can locate the patch sites by code signature: `pip install pefile` then
@@ -103,6 +104,14 @@ window in the corner, not scaled). Alt-tab is painless in this mode. Nothing els
 re-enters fullscreen (the "F1 to go full screen" text in the launcher is a leftover — no key is wired
 to it).
 
+**Part D — skip the intro video, opt-in (`-NoIntro`), 5 bytes.** The Atari logo is an MP4 played
+through Media Foundation's `MFPlay` (a DirectX 9-based video renderer) which the game shuts down
+synchronously right before creating its D3D11 device. With Windows HDR enabled this can hang the game
+right after the logo, and leave the process hanging again on exit; users with 4K HDR TVs have reported
+exactly that on the Steam forums since 2022. Part D jumps over the whole intro block (the game already
+has a "skip" path for when the player cannot be created), so `mfplat`/`evr`/`d3d9` are never even
+loaded. You lose four seconds of logo.
+
 Full disassembly, the prefs-file format (including its CRC-16), and how the patch was verified by
 emulating the game's own loop code: [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
@@ -145,6 +154,9 @@ one). Unchanged by this patch.
 
 **HDR turns off after the Atari splash.** That is exclusive fullscreen doing its thing; use `-Borderless`
 (above).
+
+**With Windows HDR on, the game freezes after the Atari logo (and/or hangs on exit).** Use `-NoIntro`
+(above). Together, `-Borderless -NoIntro` is the recommended combination for HDR displays.
 
 **The default selection is odd at first launch.** The launcher pre-selects the closest match to the mode
 stored in your prefs (or to the desktop size, which it measures without DPI awareness). Pick the mode you

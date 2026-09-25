@@ -17,7 +17,6 @@
   .\T4K-ResolutionFix.ps1 "C:\...\Tempest 4000\Win10\Tempest4000.exe" ["...\Win7-8\Tempest4000.exe"]
   .\T4K-ResolutionFix.ps1 -SetMode 3840x2160@60   # pre-select a mode in the prefs file (optional)
   .\T4K-ResolutionFix.ps1 -Borderless            # also never enter exclusive fullscreen (keeps HDR on)
-  .\T4K-ResolutionFix.ps1 -NoIntro               # also skip the Atari intro video (can hang under HDR)
 #>
 [CmdletBinding()]
 param(
@@ -27,7 +26,6 @@ param(
     [switch]$Restore,
     [switch]$NoCave,
     [switch]$Borderless,
-    [switch]$NoIntro,
     [string]$SetMode,
     [string]$Prefs
 )
@@ -36,8 +34,7 @@ $Version = '1.0.0'
 
 # ---- known builds: sha256 -> patch rows (file offset, original hex, patched hex) ---------------
 # Row 0 = part A (2-byte cap fix), rows 1-2 = part B (hook + position-independent code cave),
-# rows 3-4 = part C (opt-in -Borderless: never enter exclusive fullscreen, keeps Windows HDR on),
-# row 5 = part D (opt-in -NoIntro: skip the Media Foundation intro video, which can hang under HDR).
+# rows 3-4 = part C (opt-in -Borderless: never enter exclusive fullscreen, keeps Windows HDR on).
 $Builds = @{
     '591fa01282c4a62eaed8583dac845c369d9330e7e5052e95856b80c8eba2fb1a' = @{
         Label = 'Steam Win10 build (2018-10-09)'
@@ -46,8 +43,7 @@ $Builds = @{
             @(0x8e6e5, '0f82f7010000', 'e97601020090'),
             @(0xae860, '000000000000000000000000000000000000000000000000000000000000000000000000000000', '0f827c00feffe800000000588b8031fffdff8b008b401cd1e839043e0f826000feffe964fefdff'),
             @(0x8fe9a, '01', '00'),
-            @(0x8fecb, '01', '00'),
-            @(0x8fc5c, '680c3f5400', 'e961010000')
+            @(0x8fecb, '01', '00')
         )
     }
     '411aa66ab702b21c4e0949e4049b486aeb88325786c3f6d14a853888058a9b9b' = @{
@@ -57,8 +53,7 @@ $Builds = @{
             @(0x8e775, '0f82f7010000', 'e97601020090'),
             @(0xae8f0, '000000000000000000000000000000000000000000000000000000000000000000000000000000', '0f827c00feffe800000000588b8031fffdff8b008b401cd1e839043e0f826000feffe964fefdff'),
             @(0x8ff2a, '01', '00'),
-            @(0x8ff5b, '01', '00'),
-            @(0x8fcec, '68143f5400', 'e961010000')
+            @(0x8ff5b, '01', '00')
         )
     }
 }
@@ -202,10 +197,9 @@ foreach ($exe in $exes) {
         $rows = @(, $full[0])
         if (-not $NoCave) { $rows += , $full[1]; $rows += , $full[2] }
         if ($Borderless) { $rows += , $full[3]; $rows += , $full[4] }
-        if ($NoIntro) { $rows += , $full[5] }
         function PartState($r) { $st = @($r | ForEach-Object { Get-RowState $data $_ } | Select-Object -Unique); if ($st.Count -eq 1) { return $st[0] } else { return 'unknown' } }
         $states = @(); foreach ($row in $rows) { $states += (Get-RowState $data $row) }
-        Write-Host ("   build: {0}   state: A: {1}, B: {2}, C(borderless): {3}, D(no-intro): {4}" -f $build.Label, (PartState @(, $full[0])), (PartState @($full[1], $full[2])), (PartState @($full[3], $full[4])), (PartState @(, $full[5])))
+        Write-Host ("   build: {0}   state: A: {1}, B: {2}, C(borderless): {3}" -f $build.Label, (PartState @(, $full[0])), (PartState @($full[1], $full[2])), (PartState @($full[3], $full[4])))
         if ($Check) { continue }
         if ($states -contains 'unknown') { Write-Host "   unexpected bytes at a patch site - refusing to touch this file"; $rc = 1; continue }
         if (-not ($states -contains 'orig')) { Write-Host "   already patched - nothing to do"; continue }

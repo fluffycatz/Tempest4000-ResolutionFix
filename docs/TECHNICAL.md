@@ -157,26 +157,6 @@ Part C therefore just changes the two initialisers `mov dword [ebp-0x234], 1` (`
 Win7-8: `0x490b24`, `0x490b55`) to `0`. Consequence: no display-mode switch, desktop HDR state
 untouched, the 4K `WS_POPUP` window is composited by DWM as a borderless full-screen window.
 
-### Part D (opt-in): skip the Media Foundation intro
-
-```
-0x490852  CoInitializeEx(NULL, 0)
-0x49085c  push &g_player ; push hwnd ; push 0,0,0 ; push L"Assets\Atari.mp4"
-0x490872  MFPCreateMediaPlayer(...)            ; fStartPlayback = 0
-0x490878  Sleep(50) ; if (FAILED(hr)) goto 0x4909c8
-0x4908b1  loop: PeekMessage/DispatchMessage ; if (g_activated == 1) { Play(); g_activated = 2 }
-          GetState(&s): wait for PLAYING (2) then STOPPED (1); watchdog 5000 iterations x Sleep(10)
-0x4909a4  if (g_player) { g_player->Shutdown() ; g_player->Release() }
-0x4909c2  edi = out-arg ; g_player = 0 ; DestroyWindow(splash) ; create game window ; init D3D11
-```
-
-`IMFPMediaPlayer::Shutdown` blocks until the MF session and the EVR (D3D9Ex) presenter have torn
-down. Part D replaces the 5-byte `push &g_player` at `0x49085c` (Win7-8: `0x4908ec`) with
-`jmp 0x4909c2` (`0x490a52`), i.e. it takes the game's own "player could not be created" path one
-instruction earlier. `CoInitializeEx` is kept. The out-pointer reloaded into `edi` at the target was
-stored at `0x490715` from the function's third argument, so the path is valid. At process exit the game
-only `Release()`s `g_player` if non-null (`0x491ce2`), which it never is after the intro.
-
 ### Prefs file
 
 `%USERPROFILE%\Documents\Tempest4000_Savedata\Tempest4000_UserPrefs.dat`, 0x898 bytes, magic

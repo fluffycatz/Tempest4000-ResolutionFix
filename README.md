@@ -38,8 +38,9 @@ powershell -ExecutionPolicy Bypass -File .\T4K-ResolutionFix.ps1
 | Undo (restore the backups) | `T4K-ResolutionFix.bat -Restore` — or Steam → *Verify integrity of game files* |
 | Explicit exe path(s) | `T4K-ResolutionFix.bat "C:\Program Files (x86)\Steam\steamapps\common\Tempest 4000\Win10\Tempest4000.exe"` |
 | Minimal 2-byte variant only (see below) | `T4K-ResolutionFix.bat -NoCave` |
+| **HDR / borderless mode** (see below) | `T4K-ResolutionFix.bat -Borderless` |
 | Pre-select a mode in your prefs file (optional) | `T4K-ResolutionFix.bat -SetMode 3840x2160@60` |
-| Linux / Steam Deck / macOS | `python3 t4k_resfix.py` (same options, lower-case: `--check`, `--restore`, `--no-cave`, `--set-mode 3840x2160@60`) |
+| Linux / Steam Deck / macOS | `python3 t4k_resfix.py` (same options, lower-case: `--check`, `--restore`, `--no-cave`, `--borderless`, `--set-mode 3840x2160@60`) |
 
 The Python patcher needs no extra packages for the known Steam builds. For an unknown build
 (GOG? a future re-link?) it can locate the patch sites by code signature: `pip install pefile` then
@@ -88,6 +89,20 @@ on the useful end of the list. The desktop mode always passes, so the list can n
 a small laptop panel. The cave lives in the zero padding at the end of `.text` and is position-independent
 (the exe is ASLR-enabled). `-NoCave` / `--no-cave` applies Part A only.
 
+**Part C — HDR / borderless mode, opt-in (`-Borderless`), 2 bytes.** At start-up the game creates a
+borderless `WS_POPUP` window sized to the selected mode and then calls
+`IDXGISwapChain::SetFullscreenState(TRUE)` with a display-mode switch — true exclusive fullscreen with
+an 8-bit SDR swap chain, which makes Windows/the driver drop HDR output the moment the Atari splash
+ends (the LG signal-info box shows SDR). Part C clears the flag that triggers that call, so the game
+simply keeps running in its borderless window at the desktop resolution: no mode switch, Windows HDR
+stays on, and driver-side SDR→HDR (NVIDIA RTX HDR) works. Speed correction is unaffected — in windowed
+mode the game reads the refresh rate from `DwmGetCompositionTimingInfo`, i.e. the real desktop rate,
+and presents with vsync. Two things follow from "no mode switch": set your **desktop** to the refresh
+rate you want (144 Hz…), and pick the **desktop resolution** in the launcher (a smaller mode would be a
+window in the corner, not scaled). Alt-tab is painless in this mode. Nothing else in this build ever
+re-enters fullscreen (the "F1 to go full screen" text in the launcher is a leftover — no key is wired
+to it).
+
 Full disassembly, the prefs-file format (including its CRC-16), and how the patch was verified by
 emulating the game's own loop code: [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
@@ -95,8 +110,8 @@ emulating the game's own loop code: [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 | Launch option | Link date | SHA-256 of original `Tempest4000.exe` | after patch |
 |---|---|---|---|
-| Play Tempest 4000 on Windows 10 (`Win10\`) | 2018-10-09 | `591fa012 82c4a62e aed8583d ac845c36 9d9330e7 e5052e95 856b80c8 eba2fb1a` | `46e82e75…d01f6e` |
-| Play Tempest 4000 on Windows 7 or 8 (`Win7-8\`) | 2018-10-12 | `411aa66a b702b21c 4e0949e4 049b486a eb883257 86c3f6d1 4a853888 058a9b9b` | `e143b845…78b0a` |
+| Play Tempest 4000 on Windows 10 (`Win10\`) | 2018-10-09 | `591fa012 82c4a62e aed8583d ac845c36 9d9330e7 e5052e95 856b80c8 eba2fb1a` | `46e82e75…d01f6e` (`499e70c2…3e8c7` with `-Borderless`) |
+| Play Tempest 4000 on Windows 7 or 8 (`Win7-8\`) | 2018-10-12 | `411aa66a b702b21c 4e0949e4 049b486a eb883257 86c3f6d1 4a853888 058a9b9b` | `e143b845…78b0a` (`471e96d5…62f8f` with `-Borderless`) |
 
 These are the current Steam depot files (unchanged since 2018). Any other file is refused untouched.
 
@@ -116,7 +131,8 @@ $ python3 tools/emu_test.py Tempest4000.exe            # patched
   1366x768 laptop, 5 modes                src=   5 accepted=  4 4K@60=False default=1366 x 768 @60 Hz
 ```
 
-Confirmed on real hardware: RTX 5090 + LG G3 (HDMI 2.1), 3840×2160 at 60 and 144 Hz.
+Confirmed on real hardware: RTX 5090 + LG G3 (HDMI 2.1), 3840×2160 at 60 and 144 Hz; `-Borderless`
+with Windows HDR + RTX HDR.
 
 ## FAQ
 
@@ -126,6 +142,9 @@ not touch anything except the launcher's mode-list loop. Steam still runs the ga
 **The list shows 50 Hz, 60 Hz, 100 Hz … but not 59.94 Hz.** That is the game's own de-duplication
 (refresh rates within 5 Hz of the previous entry for the same resolution are merged, keeping the higher
 one). Unchanged by this patch.
+
+**HDR turns off after the Atari splash.** That is exclusive fullscreen doing its thing; use `-Borderless`
+(above).
 
 **The default selection is odd at first launch.** The launcher pre-selects the closest match to the mode
 stored in your prefs (or to the desktop size, which it measures without DPI awareness). Pick the mode you

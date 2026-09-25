@@ -128,35 +128,6 @@ The filter is deliberately relative to the desktop width rather than a fixed "�
 laptop it removes nothing important, and the desktop mode itself can never be filtered out, so the list
 is never empty.
 
-### Part C (opt-in): stay in the borderless window
-
-The game window is created at `0x490a71` — `CreateWindowExA(0, "OVRAppWindow", …, WS_POPUP|WS_VISIBLE,
-monitor.x, monitor.y, mode.w, mode.h, …)` — followed by a small struct
-`{ 1, fullscreen=1, w, h, num, den }` (`0x490a8a`–`0x490afa`) that the renderer copies to `this+0xc`.
-The `fullscreen` flag (`this+0x10`) gates every exclusive-mode call:
-
-| site | code | with flag = 0 |
-|---|---|---|
-| `0x487dde`/`0x487e15` (swap-chain creation) | refresh from mode, `FindClosestMatchingMode` | refresh 0/1, no closest-match lookup |
-| `0x487ffc` | `SetFullscreenState(TRUE, output)` after `CreateSwapChain` | `SetFullscreenState(FALSE, NULL)` (no-op) |
-| `0x486a56` | `SetFullscreenState(TRUE, output)` after device init | skipped |
-| `0x48b796` (teardown) | `SetFullscreenState(FALSE)` | skipped |
-
-`DXGI_SWAP_CHAIN_DESC.Windowed` is always `TRUE` at creation and the factory gets
-`MakeWindowAssociation(hwnd, DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER)`, so nothing else can
-flip the state: the runtime toggle `0x4881b0` (vtable `0x4cb798` slot 7) has no caller — F1 is not
-mapped (the WndProc's `WM_KEYDOWN` only ORs the prefs key table into `[0x543f74]`, and `0x70` is
-absent from it), and the `WM_SETFOCUS`/`WM_KILLFOCUS`/`WM_ACTIVATE` handlers only mute audio and
-manage the cursor.
-
-Speed correction (`0x43c740`): `GetDesc()` on the swap chain; if `!Windowed`, the time-step scale is
-`60 / (BufferDesc.RefreshRate)`, otherwise `60 / DwmGetCompositionTimingInfo().rateRefresh`. Present
-is `Present(1, 0)`. So in the borderless configuration pacing follows the real desktop refresh.
-
-Part C therefore just changes the two initialisers `mov dword [ebp-0x234], 1` (`0x490a94`, `0x490ac5`;
-Win7-8: `0x490b24`, `0x490b55`) to `0`. Consequence: no display-mode switch, desktop HDR state
-untouched, the 4K `WS_POPUP` window is composited by DWM as a borderless full-screen window.
-
 ### Prefs file
 
 `%USERPROFILE%\Documents\Tempest4000_Savedata\Tempest4000_UserPrefs.dat`, 0x898 bytes, magic

@@ -15,10 +15,6 @@ The patch (57 bytes, applied to your own Tempest4000.exe, backup kept):
   A. cap the walk on the number of *accepted* entries instead (the real buffer limit)
   B. skip modes narrower than half the desktop width, so a pathological mode list
      still cannot crowd out the useful resolutions (position-independent code cave)
-  C. (opt-in, --borderless) never call SetFullscreenState(TRUE): the game's borderless
-     WS_POPUP window is used as-is, no display-mode switch happens, Windows HDR stays on
-     (so e.g. RTX HDR keeps working), and the game runs at the desktop refresh rate.
-     Select the desktop resolution in the launcher when using this.
 
 Usage
 -----
@@ -27,8 +23,6 @@ Usage
   python3 t4k_resfix.py --check [exe...]      # report state, change nothing
   python3 t4k_resfix.py --restore [exe...]    # put Tempest4000.exe.orig back
   python3 t4k_resfix.py --no-cave ...         # apply only part A (2 bytes)
-  python3 t4k_resfix.py --borderless ...      # also part C: never enter exclusive fullscreen
-                                              # (borderless window, no mode switch, keeps Windows HDR on)
   python3 t4k_resfix.py --set-mode 3840x2160@60 [prefs.dat]
                                               # pre-select a mode in Tempest4000_UserPrefs.dat
                                               # (optional; you can also just pick it in the launcher)
@@ -131,20 +125,6 @@ def locate_sites(path):
         raise LookupError("not enough .text padding for the code cave")
     if abs(R['float50'] - 50.0) > 1e-6:
         raise LookupError("unexpected refresh threshold constant %r" % R['float50'])
-    # Part C: the fullscreen flag initialisers right after the game window is created
-    # (CreateWindowExA with WS_POPUP|WS_VISIBLE). The mode/flags struct is built as
-    # mov [ebp+D0],1 ; mov [ebp+D0+4],1 (fullscreen) ; ... and again for the selected-mode branch.
-    mw = _find_all(code, rb'\x68\x00\x00\x00\x90\x68....\x68....\x6a\x00\xff\x15....')
-    if len(mw) != 1: raise LookupError("game window creation not found")
-    win = code[mw[0]:mw[0] + 0x100]
-    inits = [(m.start(), struct.unpack('<i', m.group(1))[0], struct.unpack('<I', m.group(2))[0])
-             for m in re.finditer(rb'\xc7\x85(....)(....)', win, re.DOTALL)]
-    if len(inits) < 2 or inits[1][1] != inits[0][1] + 4:
-        raise LookupError("fullscreen flag initialisers not found")
-    flag_disp = inits[1][1]
-    sites = [base + t0 + mw[0] + off for off, disp, imm in inits if disp == flag_disp and imm in (0, 1)]
-    if len(sites) != 2: raise LookupError("expected 2 fullscreen flag initialisers, found %d" % len(sites))
-    R['fullscreen_flag_sites'] = sites
     return R
 
 # ---------------------------------------------------------------------------
@@ -153,9 +133,8 @@ def locate_sites(path):
 def _rel32(src_end, dst):
     return struct.pack('<i', dst - src_end)
 
-def build_patch_table(R, cave=True, borderless=False):
-    """Return [(file_offset, old_bytes, new_bytes)] for the given site map.
-    Row 0 = part A, rows 1-2 = part B (if cave), then part C rows (if borderless)."""
+def build_patch_table(R, cave=True):
+    """Return [(file_offset, old_bytes, new_bytes)] for the given site map."""
     va2off = R['va2off']
     table = []
     # A: cmp esi,0x1c00 -> cmp ecx,0x100
@@ -183,12 +162,6 @@ def build_patch_table(R, cave=True, borderless=False):
         ins = b'\xe9' + _rel32(a + 5, R['resume']);   c += ins; a += len(ins)   # jmp resume
         assert a <= R['cave_limit']
         table.append((va2off(R['cave']), b'\0' * len(c), c))
-    if borderless:
-        # C: 'mov dword [ebp+disp], 1' -> ', 0' : never call SetFullscreenState(TRUE); the WS_POPUP
-        # window sized to the selected mode then behaves as borderless fullscreen (no mode switch,
-        # desktop HDR stays on, speed correction uses the DWM refresh rate).
-        for va in R['fullscreen_flag_sites']:
-            table.append((va2off(va) + 6, b'\x01', b'\x00'))
     return table
 
 # ---------------------------------------------------------------------------
@@ -199,13 +172,16 @@ def row_state(data, row):
     cur = bytes(data[off:off+len(old)])
     return 'orig' if cur == old else 'patched' if cur == new else 'unknown'
 
-def _part_state(data, rows):
-    s = {row_state(data, r) for r in rows}
-    return 'n/a' if not rows else 'orig' if s == {'orig'} else 'patched' if s == {'patched'} else 'unknown'
-
-def table_state(data, full):
-    """Human-readable state of all parts against the full 5-row table."""
-    return "A: %s, B: %s, C(borderless): %s" % (_part_state(data, full[:1]), _part_state(data, full[1:3]), _part_state(data, full[3:5]))
+def table_state(data, table):
+    """Human-readable state: part A is row 0, part B is rows 1.. (hook + cave)."""
+    a = row_state(data, table[0])
+    b = {row_state(data, r) for r in table[1:]}
+    if len(table) == 1:
+        return a
+    if b == {'orig'}: bs = 'orig'
+    elif b == {'patched'}: bs = 'patched'
+    else: bs = 'unknown'
+    return "A: %s, B: %s" % (a, bs)
 
 def apply_table(data, table):
     """Apply rows that are still original; skip rows already patched. Returns bytes changed."""
@@ -221,30 +197,24 @@ def apply_table(data, table):
 def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
-def select_rows(full, want_cave, borderless):
-    """full = [A, B_hook, B_cave, C1, C2] -> the rows requested."""
-    rows = [full[0]]
-    if want_cave: rows += full[1:3]
-    if borderless: rows += full[3:5]
-    return rows
-
-def table_for_file(path, data, want_cave, borderless, force):
+def table_for_file(path, data, want_cave, force):
     """Pick the embedded table for a known build, else locate by signature."""
     h = sha256(data)
     if h in KNOWN_BUILDS:
         label, full = KNOWN_BUILDS[h]
-        return label, select_rows(full, want_cave, borderless)
-    # a (partially) patched file hashes differently: identify it by its patch-site bytes
+        return label, full if want_cave else full[:1]
+    # maybe already patched: compare against patched hashes
     for oh, (label, full) in KNOWN_BUILDS.items():
-        if all(row_state(data, r) != 'unknown' for r in full):
-            return label, select_rows(full, want_cave, borderless)
+        for tbl in (full, full[:1]):
+            probe = bytearray(data)
+            if table_state(probe, tbl) == 'patched':
+                return label, full if want_cave else full[:1]
     if not force:
         raise LookupError("unknown build (sha256 %s). Use --force to try signature-based patching." % h)
     R = locate_sites(path)
-    full = build_patch_table(R, cave=True, borderless=True)
-    if want_cave and not R['cave_empty'] and row_state(data, full[2]) != 'patched':
+    if want_cave and not R['cave_empty'] and row_state(data, build_patch_table(R, cave=True)[2]) != 'patched':
         raise LookupError(".text padding is not empty - cannot place code cave (try --no-cave)")
-    return "unknown build (signature-located)", select_rows(full, want_cave, borderless)
+    return "unknown build (signature-located)", build_patch_table(R, cave=want_cave)
 
 # ---------------------------------------------------------------------------
 # Prefs file: pre-select a mode (CRC-16/XMODEM over the first 0x894 bytes at 0x894)
@@ -368,7 +338,7 @@ def main(argv):
         for path in args:
             data = open(path, 'rb').read()
             R = locate_sites(path)
-            tbl = build_patch_table(R, cave=True, borderless=True)
+            tbl = build_patch_table(R, cave=True)
             print("    %r: (%r, [" % (sha256(data), os.path.basename(path)))
             for off, old, new in tbl:
                 print("        (0x%x, %r, %r)," % (off, old.hex(), new.hex()))
@@ -390,15 +360,9 @@ def main(argv):
                     print("   no backup found (%s). Use Steam > Verify integrity of game files." % bak); rc = 1; continue
                 shutil.copy2(bak, path); print("   restored from", bak); continue
             data = bytearray(open(path, 'rb').read())
-            label, table = table_for_file(path, data, want_cave='--no-cave' not in flags,
-                                          borderless='--borderless' in flags, force='--force' in flags)
-            full = KNOWN_BUILDS[sha256(data)][1] if sha256(data) in KNOWN_BUILDS else None
-            if full is None:
-                for oh, (lbl, f) in KNOWN_BUILDS.items():
-                    if all(row_state(data, r) != 'unknown' for r in f): full = f
-            if full is None:
-                full = build_patch_table(locate_sites(path), cave=True, borderless=True)
-            print("   build: %s   state: %s" % (label, table_state(data, full)))
+            label, table = table_for_file(path, data, want_cave='--no-cave' not in flags, force='--force' in flags)
+            state = table_state(data, table)
+            print("   build: %s   state: %s" % (label, state))
             if '--check' in flags:
                 continue
             if all(row_state(data, r) == 'patched' for r in table):
@@ -424,16 +388,12 @@ KNOWN_BUILDS_TABLE = {
         (0x8e690, '81fe001c0000', '81f900010000'),
         (0x8e6e5, '0f82f7010000', 'e97601020090'),
         (0xae860, '000000000000000000000000000000000000000000000000000000000000000000000000000000', '0f827c00feffe800000000588b8031fffdff8b008b401cd1e839043e0f826000feffe964fefdff'),
-        (0x8fe9a, '01', '00'),
-        (0x8fecb, '01', '00'),
     ]),
     # Steam depot, Win7-8\Tempest4000.exe  (link date 2018-10-12, D3DCOMPILER_43 / XINPUT1_3)
     '411aa66ab702b21c4e0949e4049b486aeb88325786c3f6d14a853888058a9b9b': ('Steam Win7-8 build (2018-10-12)', [
         (0x8e720, '81fe001c0000', '81f900010000'),
         (0x8e775, '0f82f7010000', 'e97601020090'),
         (0xae8f0, '000000000000000000000000000000000000000000000000000000000000000000000000000000', '0f827c00feffe800000000588b8031fffdff8b008b401cd1e839043e0f826000feffe964fefdff'),
-        (0x8ff2a, '01', '00'),
-        (0x8ff5b, '01', '00'),
     ]),
 }
 for _h, (_label, _rows) in KNOWN_BUILDS_TABLE.items():

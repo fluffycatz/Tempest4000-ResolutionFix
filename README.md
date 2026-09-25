@@ -39,7 +39,7 @@ powershell -ExecutionPolicy Bypass -File .\T4K-ResolutionFix.ps1
 | Explicit exe path(s) | `T4K-ResolutionFix.bat "C:\Program Files (x86)\Steam\steamapps\common\Tempest 4000\Win10\Tempest4000.exe"` |
 | Minimal 2-byte variant only (see below) | `T4K-ResolutionFix.bat -NoCave` |
 | **HDR / borderless mode** (see below) | `T4K-ResolutionFix.bat -Borderless` |
-| **Skip the Atari intro video** (see below) | `T4K-ResolutionFix.bat -NoIntro` |
+| Skip the Atari intro video — **experimental, under investigation** | `T4K-ResolutionFix.bat -NoIntro` |
 | Pre-select a mode in your prefs file (optional) | `T4K-ResolutionFix.bat -SetMode 3840x2160@60` |
 | Linux / Steam Deck / macOS | `python3 t4k_resfix.py` (same options, lower-case: `--check`, `--restore`, `--no-cave`, `--borderless`, `--no-intro`, `--set-mode 3840x2160@60`) |
 
@@ -104,7 +104,8 @@ window in the corner, not scaled). Alt-tab is painless in this mode. Nothing els
 re-enters fullscreen (the "F1 to go full screen" text in the launcher is a leftover — no key is wired
 to it).
 
-**Part D — skip the intro video, opt-in (`-NoIntro`), 5 bytes.** The Atari logo is an MP4 played
+**Part D — skip the intro video, opt-in (`-NoIntro`), 5 bytes — EXPERIMENTAL.** On one test system this
+made the game exit right after the launcher; do not use it until this note is gone. The Atari logo is an MP4 played
 through Media Foundation's `MFPlay` (a DirectX 9-based video renderer) which the game shuts down
 synchronously right before creating its D3D11 device. With Windows HDR enabled this can hang the game
 right after the logo, and leave the process hanging again on exit; users with 4K HDR TVs have reported
@@ -155,8 +156,9 @@ one). Unchanged by this patch.
 **HDR turns off after the Atari splash.** That is exclusive fullscreen doing its thing; use `-Borderless`
 (above).
 
-**With Windows HDR on, the game freezes after the Atari logo (and/or hangs on exit).** Use `-NoIntro`
-(above). Together, `-Borderless -NoIntro` is the recommended combination for HDR displays.
+**With Windows HDR on, the game freezes after the Atari logo (and/or hangs on exit).** Known, under
+investigation. Current workaround: start the game with Windows HDR off, alt-tab out, turn HDR on,
+alt-tab back in (with `-Borderless` the game keeps running in its window).
 
 **The default selection is odd at first launch.** The launcher pre-selects the closest match to the mode
 stored in your prefs (or to the desktop size, which it measures without DPI awareness). Pick the mode you

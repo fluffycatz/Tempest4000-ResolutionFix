@@ -16,6 +16,7 @@
   .\T4K-ResolutionFix.ps1 -Restore        # put the backups back
   .\T4K-ResolutionFix.ps1 "C:\...\Tempest 4000\Win10\Tempest4000.exe" ["...\Win7-8\Tempest4000.exe"]
   .\T4K-ResolutionFix.ps1 -SetMode 3840x2160@60   # pre-select a mode in the prefs file (optional)
+  .\T4K-ResolutionFix.ps1 -Exclusive             # keep the original exclusive-fullscreen mode switch
 #>
 [CmdletBinding()]
 param(
@@ -24,6 +25,7 @@ param(
     [switch]$Check,
     [switch]$Restore,
     [switch]$NoCave,
+    [switch]$Exclusive,
     [string]$SetMode,
     [string]$Prefs
 )
@@ -31,14 +33,17 @@ $ErrorActionPreference = 'Stop'
 $Version = '1.0.0'
 
 # ---- known builds: sha256 -> patch rows (file offset, original hex, patched hex) ---------------
-# Row 0 = part A (2-byte cap fix), rows 1-2 = part B (hook + position-independent code cave).
+# Row 0 = part A (2-byte cap fix), rows 1-2 = part B (hook + position-independent code cave),
+# rows 3-4 = part C (default: never enter exclusive fullscreen, keeps Windows HDR on; -Exclusive omits it).
 $Builds = @{
     '591fa01282c4a62eaed8583dac845c369d9330e7e5052e95856b80c8eba2fb1a' = @{
         Label = 'Steam Win10 build (2018-10-09)'
         Rows  = @(
             @(0x8e690, '81fe001c0000', '81f900010000'),
             @(0x8e6e5, '0f82f7010000', 'e97601020090'),
-            @(0xae860, '000000000000000000000000000000000000000000000000000000000000000000000000000000', '0f827c00feffe800000000588b8031fffdff8b008b401cd1e839043e0f826000feffe964fefdff')
+            @(0xae860, '000000000000000000000000000000000000000000000000000000000000000000000000000000', '0f827c00feffe800000000588b8031fffdff8b008b401cd1e839043e0f826000feffe964fefdff'),
+            @(0x8fe9a, '01', '00'),
+            @(0x8fecb, '01', '00')
         )
     }
     '411aa66ab702b21c4e0949e4049b486aeb88325786c3f6d14a853888058a9b9b' = @{
@@ -46,7 +51,9 @@ $Builds = @{
         Rows  = @(
             @(0x8e720, '81fe001c0000', '81f900010000'),
             @(0x8e775, '0f82f7010000', 'e97601020090'),
-            @(0xae8f0, '000000000000000000000000000000000000000000000000000000000000000000000000000000', '0f827c00feffe800000000588b8031fffdff8b008b401cd1e839043e0f826000feffe964fefdff')
+            @(0xae8f0, '000000000000000000000000000000000000000000000000000000000000000000000000000000', '0f827c00feffe800000000588b8031fffdff8b008b401cd1e839043e0f826000feffe964fefdff'),
+            @(0x8ff2a, '01', '00'),
+            @(0x8ff5b, '01', '00')
         )
     }
 }
@@ -186,11 +193,13 @@ foreach ($exe in $exes) {
             Write-Host "   the Python patcher (t4k_resfix.py --force) can locate the patch sites by code signature."
             $rc = 1; continue
         }
-        $rows = $build.Rows
-        if ($NoCave) { $rows = ,($rows[0]) }
+        $full = $build.Rows
+        $rows = @(, $full[0])
+        if (-not $NoCave) { $rows += , $full[1]; $rows += , $full[2] }
+        if (-not $Exclusive) { $rows += , $full[3]; $rows += , $full[4] }
+        function PartState($r) { $st = @($r | ForEach-Object { Get-RowState $data $_ } | Select-Object -Unique); if ($st.Count -eq 1) { return $st[0] } else { return 'unknown' } }
         $states = @(); foreach ($row in $rows) { $states += (Get-RowState $data $row) }
-        $bs = 'n/a'; if ($rows.Count -gt 1) { $bs = if (($states[1] -eq 'patched') -and ($states[2] -eq 'patched')) { 'patched' } elseif (($states[1] -eq 'orig') -and ($states[2] -eq 'orig')) { 'orig' } else { 'unknown' } }
-        Write-Host ("   build: {0}   state: A: {1}, B: {2}" -f $build.Label, $states[0], $bs)
+        Write-Host ("   build: {0}   state: A: {1}, B: {2}, C(borderless): {3}" -f $build.Label, (PartState @(, $full[0])), (PartState @($full[1], $full[2])), (PartState @($full[3], $full[4])))
         if ($Check) { continue }
         if ($states -contains 'unknown') { Write-Host "   unexpected bytes at a patch site - refusing to touch this file"; $rc = 1; continue }
         if (-not ($states -contains 'orig')) { Write-Host "   already patched - nothing to do"; continue }

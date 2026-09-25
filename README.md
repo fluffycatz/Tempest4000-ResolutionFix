@@ -10,7 +10,7 @@ refresh rates collapsed — that filtering is the game's own and unchanged). 384
 all work, and the game speed is correct at high refresh rates because Llamasoft's October 2018 patch already
 fixed that — the same patch that introduced this bug.
 
-The fix is applied to **your own** `Tempest4000.exe` (57 bytes; a backup is kept). No game files are
+The fix is applied to **your own** `Tempest4000.exe` (59 bytes; a backup is kept). No game files are
 redistributed here.
 
 ## Quick start (Windows)
@@ -38,8 +38,9 @@ powershell -ExecutionPolicy Bypass -File .\T4K-ResolutionFix.ps1
 | Undo (restore the backups) | `T4K-ResolutionFix.bat -Restore` — or Steam → *Verify integrity of game files* |
 | Explicit exe path(s) | `T4K-ResolutionFix.bat "C:\Program Files (x86)\Steam\steamapps\common\Tempest 4000\Win10\Tempest4000.exe"` |
 | Minimal 2-byte variant only (see below) | `T4K-ResolutionFix.bat -NoCave` |
+| Keep the original exclusive-fullscreen mode switch (see below) | `T4K-ResolutionFix.bat -Exclusive` |
 | Pre-select a mode in your prefs file (optional) | `T4K-ResolutionFix.bat -SetMode 3840x2160@60` |
-| Linux / Steam Deck / macOS | `python3 t4k_resfix.py` (same options, lower-case: `--check`, `--restore`, `--no-cave`, `--set-mode 3840x2160@60`) |
+| Linux / Steam Deck / macOS | `python3 t4k_resfix.py` (same options, lower-case: `--check`, `--restore`, `--no-cave`, `--exclusive`, `--set-mode 3840x2160@60`) |
 
 The Python patcher needs no extra packages for the known Steam builds. For an unknown build
 (GOG? a future re-link?) it can locate the patch sites by code signature: `pip install pefile` then
@@ -88,6 +89,19 @@ on the useful end of the list. The desktop mode always passes, so the list can n
 a small laptop panel. The cave lives in the zero padding at the end of `.text` and is position-independent
 (the exe is ASLR-enabled). `-NoCave` / `--no-cave` applies Part A only.
 
+**Part C — no exclusive fullscreen, 2 bytes (default; `-Exclusive` leaves it out).** At start-up the
+game creates a desktop-sized borderless `WS_POPUP` window and then calls
+`IDXGISwapChain::SetFullscreenState(TRUE)` with a display-mode switch — true exclusive fullscreen with
+an 8-bit SDR swap chain, which is what makes Windows/the driver drop HDR output the moment the Atari
+splash ends. Part C clears the flag that triggers that call, so the game simply keeps running in its
+borderless window: no mode switch, Windows HDR stays on, alt-tab is instant, and the game's own speed
+correction reads the real refresh rate from `DwmGetCompositionTimingInfo`. The resolution you pick in
+the launcher still sets the render resolution (the swap-chain buffer, which `Present` stretches to the
+screen); the refresh rate you pick no longer switches the display — the desktop refresh rate is what
+you get. Nothing else in this build ever re-enters fullscreen (the "F1 to go full screen" text in the
+launcher is a leftover — no key is wired to it). Use `-Exclusive` if you actually want the display to
+switch modes, e.g. for a refresh rate your desktop doesn't run at.
+
 Full disassembly, the prefs-file format (including its CRC-16), and how the patch was verified by
 emulating the game's own loop code: [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
@@ -95,8 +109,8 @@ emulating the game's own loop code: [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 | Launch option | Link date | SHA-256 of original `Tempest4000.exe` | after patch |
 |---|---|---|---|
-| Play Tempest 4000 on Windows 10 (`Win10\`) | 2018-10-09 | `591fa012 82c4a62e aed8583d ac845c36 9d9330e7 e5052e95 856b80c8 eba2fb1a` | `46e82e75…d01f6e` |
-| Play Tempest 4000 on Windows 7 or 8 (`Win7-8\`) | 2018-10-12 | `411aa66a b702b21c 4e0949e4 049b486a eb883257 86c3f6d1 4a853888 058a9b9b` | `e143b845…78b0a` |
+| Play Tempest 4000 on Windows 10 (`Win10\`) | 2018-10-09 | `591fa012 82c4a62e aed8583d ac845c36 9d9330e7 e5052e95 856b80c8 eba2fb1a` | `499e70c2…3e8c7` (`46e82e75…d01f6e` with `-Exclusive`) |
+| Play Tempest 4000 on Windows 7 or 8 (`Win7-8\`) | 2018-10-12 | `411aa66a b702b21c 4e0949e4 049b486a eb883257 86c3f6d1 4a853888 058a9b9b` | `471e96d5…62f8f` (`e143b845…78b0a` with `-Exclusive`) |
 
 These are the current Steam depot files (unchanged since 2018). Any other file is refused untouched.
 
@@ -116,8 +130,8 @@ $ python3 tools/emu_test.py Tempest4000.exe            # patched
   1366x768 laptop, 5 modes                src=   5 accepted=  4 4K@60=False default=1366 x 768 @60 Hz
 ```
 
-Confirmed on real hardware: RTX 5090 + LG G3 (HDMI 2.1), 3840×2160 at 60 and 144 Hz, Windows HDR +
-Auto HDR on.
+Confirmed on real hardware: RTX 5090 + LG G3 (HDMI 2.1), 3840×2160 at 144 Hz with Windows HDR on for
+the whole session, including clean exit.
 
 ## FAQ
 
@@ -128,10 +142,11 @@ not touch anything except the launcher's mode-list loop. Steam still runs the ga
 (refresh rates within 5 Hz of the previous entry for the same resolution are merged, keeping the higher
 one). Unchanged by this patch.
 
-**HDR.** The game runs in exclusive fullscreen with an SDR swap chain. Windows HDR with **Auto HDR** works
-(tested). **NVIDIA RTX HDR does not**: with RTX HDR enabled for this game it freezes after the Atari
-logo and hangs again on exit — that is the driver's injection, not the game or this patch. Disable
-RTX HDR for Tempest 4000 (NVIDIA App → Graphics → per-program settings) and use Auto HDR instead.
+**HDR.** With the default patch the game never leaves the desktop's display mode, so Windows HDR stays on
+(tested). With `-Exclusive` the mode switch drops the output to SDR while the game runs — that is
+exclusive fullscreen doing its thing. **NVIDIA RTX HDR** is a known problem either way: with it enabled
+for this game, the game freezes after the Atari logo and hangs again on exit (the driver's injection,
+not the game or this patch). Disable RTX HDR for Tempest 4000 (NVIDIA App → per-program settings).
 
 **The default selection is odd at first launch.** The launcher pre-selects the closest match to the mode
 stored in your prefs (or to the desktop size, which it measures without DPI awareness). Pick the mode you

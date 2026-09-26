@@ -1,4 +1,4 @@
-# Tempest 4000 – Resolution List Fix
+# Tempest 4000 - Resolution List Fix
 
 Fixes the Tempest 4000 (PC, Steam) launcher not offering high resolutions - 1080p, 1440p, 4K - on
 modern GPUs and displays. No more editing your EDID with CRU, no driver reinstalls, no second monitor.
@@ -151,8 +151,8 @@ loop. Llamasoft/Atari are welcome to it.
 
 ## Credits
 
-* Reverse engineering and the proxy done using Claude Fable (Anthropic).
-* crosire's ReShade - and its handling of the app-compat shim exports, which showed the way out of the start-up crash.
+* Giles (gilesgoat) of Llamasoft, for describing the list-capacity problem on the Steam forum.
+* Reverse engineering, patch design and emulation testing done using Claude Fable (Anthropic).
 
 ## License
 

@@ -36,7 +36,7 @@ Flags = 8 ('DXGI_ENUM_MODES_DISABLED_STEREO'); 'DXGI_ENUM_MODES_SCALING' is **no
 the list has no centered/stretched duplicates - but drivers commonly return each mode twice anyway
 (scanline ordering variants), and every legacy resolution at every refresh rate the display accepts.
 
-### The loop (0x48f244 – 0x48f4fc)
+### The loop (0x48f244 - 0x48f4fc)
 
     0x48f290  cmp esi, 0x1c00        ; esi = byte offset into g_list  → stops after 256 SOURCE entries   <-- bug
     0x48f296  jge done
@@ -124,7 +124,7 @@ is never empty.
 
 The game window is created at '0x490a71' - 'CreateWindowExA(0, "OVRAppWindow", …, WS_POPUP|WS_VISIBLE,
 monitor.x, monitor.y, mode.w, mode.h, …)' - followed by a small struct
-'{ 1, fullscreen=1, w, h, num, den }' ('0x490a8a'–'0x490afa') that the renderer copies to 'this+0xc'.
+'{ 1, fullscreen=1, w, h, num, den }' ('0x490a8a'-'0x490afa') that the renderer copies to 'this+0xc'.
 The 'fullscreen' flag ('this+0x10') gates every exclusive-mode call:
 
 | site | code | with flag = 0 |

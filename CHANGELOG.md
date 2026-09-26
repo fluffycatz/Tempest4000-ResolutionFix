@@ -1,17 +1,17 @@
 # Changelog
 
-## 1.0.0 — 2026-09-25
+## 1.0.0 - 2026-09-25
 
 First release.
 
 * Part A: cap the launcher's mode walk on accepted entries instead of source entries (the actual bug).
-* Part B: position-independent code cave adding a `width >= desktop_width/2` filter so pathological
+* Part B: position-independent code cave adding a 'width >= desktop_width/2' filter so pathological
   mode lists cannot crowd out high resolutions.
-* Part C (default; `-Exclusive` / `--exclusive` leaves it out): never enter exclusive fullscreen, so
+* Part C (default; '-Exclusive' / '--exclusive' leaves it out): never enter exclusive fullscreen, so
   Windows HDR stays on and no display-mode switch happens; the game runs in its borderless window at
   the desktop refresh rate.
-* Windows patcher (`T4K-ResolutionFix.bat` / `.ps1`, no dependencies) and cross-platform Python patcher
-  (`t4k_resfix.py`) with `--check`, `--restore`, `--no-cave`, `--set-mode`.
-* Supports both Steam builds (`Win10\` 2018-10-09 and `Win7-8\` 2018-10-12).
-* Emulation test harness (`tools/emu_test.py`).
+* Windows patcher ('T4K-ResolutionFix.bat' / '.ps1', no dependencies) and cross-platform Python patcher
+  ('t4k_resfix.py') with '--check', '--restore', '--no-cave', '--set-mode'.
+* Supports both Steam builds ('Win10\' 2018-10-09 and 'Win7-8\' 2018-10-12).
+* Emulation test harness ('tools/emu_test.py').
 * Known incompatibility documented: NVIDIA RTX HDR freezes the game after the intro (Auto HDR is fine).

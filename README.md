@@ -124,7 +124,7 @@ These are the current Steam depot files (unchanged since 2018). Any other file i
       stress: 70 res x 13 Hz, duplicated      src=1768 accepted=145 4K@60=True  default=3840 x 2160 @60 Hz
       1366x768 laptop, 5 modes                src=   5 accepted=  4 4K@60=False default=1366 x 768 @60 Hz
 
-Confirmed on real hardware: RTX 5090 + LG G3 (HDMI 2.1), 3840×2160 at 144 Hz with Windows HDR on for
+Confirmed on real hardware: RTX 5090 + LG G4 (HDMI 2.1), 3840×2160 at 144 Hz with Windows HDR on for
 the whole session, including clean exit.
 
 ## FAQ

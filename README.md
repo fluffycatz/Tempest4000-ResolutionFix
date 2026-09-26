@@ -20,7 +20,7 @@ redistributed here.
 3. Double-click **'T4K-ResolutionFix.bat'**. It finds your Steam library, patches both
    'Win10\Tempest4000.exe' and 'Win7-8\Tempest4000.exe', and keeps 'Tempest4000.exe.orig' backups.
 4. Launch the game → "Play Tempest 4000 on Windows 10" → pick your mode in the list → **Start Game**.
-   The choice is saved. In-game, **F1** goes fullscreen at that mode.
+   The choice is saved.
 
 If the folder is not writable you will be told to run it as Administrator. If you get a Windows
 SmartScreen prompt on a freshly downloaded '.bat', choose *More info → Run anyway* - or run the
